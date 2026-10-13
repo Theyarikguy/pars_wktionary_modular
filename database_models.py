@@ -5,9 +5,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Word(Base):
     __tablename__ = 'word'
+    __table_args__ = (
+        UniqueConstraint('title', 'lang', 'pos', name='uq_word_title_lang_pos'),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    lang: Mapped[str] = mapped_column(String(10), index=True, default='ru')
+    pos: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     senses: Mapped[list['Sense']] = relationship(
         back_populates='word',
@@ -16,13 +21,13 @@ class Word(Base):
     )
 
     def __repr__(self) -> str:
-        return f'<Word id={self.id} title={self.title!r}>'
+        return f'<Word id={self.id} title={self.title!r} lang={self.lang!r} pos={self.pos!r}>'
 
 
 class Sense(Base):
     __tablename__ = 'sense'
     __table_args__ = (
-        UniqueConstraint('word_id', 'lang', 'sense_no', name='uq_sense_page_lang_no'),
+        UniqueConstraint('word_id', 'sense_no', name='uq_sense_word_no'),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -30,11 +35,9 @@ class Sense(Base):
         ForeignKey('word.id', ondelete='CASCADE'), index=True
     )
     sense_no: Mapped[int] = mapped_column()
-    lang: Mapped[str] = mapped_column(String(10), index=True, default='ru')
-    pos: Mapped[str | None] = mapped_column(String(32), nullable=True)
     definition: Mapped[str] = mapped_column(Text)
 
-    word: Mapped['Word'] = relationship(back_populates='senses')   # ← было page
+    word: Mapped['Word'] = relationship(back_populates='senses')
     synonyms: Mapped[list['Synonym']] = relationship(
         back_populates='sense',
         cascade='all, delete-orphan',

@@ -65,16 +65,29 @@ def _senses_from_heading(
 
 
 def _parse_meanings(wikitext: str) -> list[dict]:
-    section = _get_section(wikitext, 'ru')
-    lines = split_lines(section)
+    section = get_section(wikitext, 'ru')
+    lines = section.splitlines()
     headings = find_headings(lines)
 
     result: list[dict] = []
     for idx, (_, _, title) in enumerate(headings):
         if title != 'Значение':
             continue
-        result.extend(_senses_from_heading(lines, headings, idx))
+        for item in _senses_from_heading(lines, headings, idx):
+            result.append({
+                'lang': 'ru',
+                'pos': None,
+                'definition': item['definition'],
+                'synonyms': item['synonyms'],
+            })
     return result
+
+
+def _extract(wikitext: str, title: str) -> dict:
+    return {
+        'title': title,
+        'meanings': _parse_meanings(wikitext),
+    }
 
 # --- значение парсера ---
 
@@ -88,8 +101,9 @@ def _matches(text: str) -> bool:
 def _extract(wikitext: str, title: str) -> dict:
     return {
         'title': title,
-        'lang': 'ru',
-        'meanings': _parse_meanings(wikitext),
+        'lexemes': [
+            {'lang': 'ru', 'pos': None, 'meanings': _parse_meanings(wikitext)},
+        ],
     }
 
 

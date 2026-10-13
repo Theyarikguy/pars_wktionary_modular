@@ -10,7 +10,7 @@ import re
 from typing import List, Dict
 
 from register import ParserRegistry
-from setup_database import init_db
+from setup_database import init_db, drop_db
 
 PATH = "enwiktionary-20261001-pages-articles-multistream.xml.bz2"
 # Press the green button in the gutter to run the script.
@@ -70,10 +70,11 @@ def write_db(registry: ParserRegistry, lang: str | None = None) -> None:
                 save_batch(db, buffer)
 
 if __name__ == '__main__':
-
+    # drop_db()
+    # init_db()
     with SessionLocal() as db:
         show_nums(db)
-        select_target(db, target = "peach")
+        select_target(db, target = "walk")
 
-    registry = default_registry()
-    write_db(registry, lang='en')
+    # registry = default_registry()
+    # write_db(registry, lang='en')

@@ -75,9 +75,10 @@ def _parse_syn_template(text: str) -> List[str]:
     return result
 
 
-def _senses_in_pos(lines: List[str], start: int, end: int, pos: str, counter_start: int) -> List[Dict]:
-    result = []
-    counter = counter_start
+def _senses_in_pos(lines: list[str], start: int, end: int) -> list[dict]:
+    """Значения внутри одной POS-секции. Нумерация — с 1."""
+    result: list[dict] = []
+    counter = 0
     current = None
 
     for k in range(start + 1, end):
@@ -93,7 +94,6 @@ def _senses_in_pos(lines: List[str], start: int, end: int, pos: str, counter_sta
                 'no': counter,
                 'definition': definition,
                 'synonyms': [],
-                'pos': pos,
             }
             result.append(current)
             continue
@@ -106,29 +106,46 @@ def _senses_in_pos(lines: List[str], start: int, end: int, pos: str, counter_sta
     return result
 
 
-def _parse_meanings(wikitext: str) -> List[Dict]:
-    section = _get_section(wikitext, 'English')
-    lines = split_lines(section)
+def _parse_meanings(wikitext: str) -> list[dict]:
+    en = _get_section(wikitext, 'English')
+    lines = en.splitlines()
     headings = find_headings(lines)
 
-    def pos_ranges():
-        for idx, (i, level, title) in enumerate(headings):
-            if title not in EN_POS:
-                continue
-            end = len(lines)
-            for j in range(idx + 1, len(headings)):
-                j_i, j_level, _ = headings[j]
-                if j_level <= level:
-                    end = j_i
-                    break
-            yield i, end, title
+    result: list[dict] = []
+    for idx, (i, level, title) in enumerate(headings):
+        if title not in EN_POS:
+            continue
 
-    result, counter = [], 0
-    for start, end, pos in pos_ranges():
-        senses = _senses_in_pos(lines, start, end, pos, counter)
-        result.extend(senses)
-        counter += len(senses)
+        end = len(lines)
+        for j in range(idx + 1, len(headings)):
+            j_i, j_level, _ = headings[j]
+            if j_level <= level:
+                end = j_i
+                break
+
+        for item in _senses_in_pos(lines, i, end):
+            result.append({
+                'lang': 'en',
+                'pos': title,
+                'definition': item['definition'],
+                'synonyms': item['synonyms'],
+            })
+
     return result
+
+
+def _extract(wikitext: str, title: str) -> dict:
+    return {
+        'title': title,
+        'meanings': _parse_meanings(wikitext),
+    }
+
+
+def _extract(wikitext: str, title: str) -> dict:
+    return {
+        'title': title,
+        'lexemes': _parse_meanings(wikitext),
+    }
 
 
 def _matches(text: str) -> bool:
