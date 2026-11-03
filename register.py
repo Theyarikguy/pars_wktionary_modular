@@ -1,4 +1,4 @@
-from parser_types import Parser
+from lang_parsers.parser_types import Parser
 
 
 class ParserRegistry:

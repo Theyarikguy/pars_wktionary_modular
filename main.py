@@ -2,17 +2,13 @@ import bz2
 import mwxml
 
 from crud import save_batch, show_nums, select_target
-import parser_types
-from connection import SessionLocal
-from builtin import default_registry
-
-import re
-from typing import List, Dict
+from database.connection import SessionLocal
 
 from register import ParserRegistry
-from setup_database import init_db, drop_db
+from setup_database import drop_db, init_db
 
-PATH = "enwiktionary-20261001-pages-articles-multistream.xml.bz2"
+from builtin import default_registry
+PATH = "ruwiktionary-20260101-pages-articles-multistream.xml.bz2"
 # Press the green button in the gutter to run the script.
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
@@ -69,12 +65,29 @@ def write_db(registry: ParserRegistry, lang: str | None = None) -> None:
             if buffer:
                 save_batch(db, buffer)
 
+def get_article_by_title(dump_path: str, title: str) -> str | None:
+    """Возвращает wikitext статьи с указанным названием или None."""
+    with bz2.open(dump_path, "rb") as f:
+        dump = mwxml.Dump.from_file(f)
+        for page in dump:
+            if page.title != title:
+                continue
+
+            last_rev = None
+            for rev in page:
+                last_rev = rev
+
+            return last_rev.text if last_rev else None
+
+    return None
+
 if __name__ == '__main__':
-    # drop_db()
-    # init_db()
+    drop_db()
+    init_db()
     with SessionLocal() as db:
         show_nums(db)
-        select_target(db, target = "walk")
+        select_target(db, target = "горе")
+        print(get_article_by_title(PATH, title="горе"))
 
-    # registry = default_registry()
-    # write_db(registry, lang='en')
+    registry = default_registry()
+    write_db(registry, lang='ru')

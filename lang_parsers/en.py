@@ -5,7 +5,7 @@ from common import (
     HEADING_RE, clean_common, find_headings, split_lines,
 )
 from functools import reduce
-from parser_types import Parser
+from lang_parsers.parser_types import Parser
 
 LANG_EN_RE = re.compile(r'^==\s*([A-Za-z][A-Za-z ]*?)\s*==\s*$')
 

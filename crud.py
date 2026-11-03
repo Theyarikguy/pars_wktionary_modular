@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session, selectinload
 
-from sqlalchemy import select, insert
-from database_models import Word, Sense, Synonym
+from database.database_models import Word, Sense, Synonym
 
 from sqlalchemy import select,func
 
@@ -102,9 +101,10 @@ def select_target(db: Session, target: str):
         return []
 
     print(f"Page: {target} ({len(words)} lexeme(s))")
+
     for word in words:
         label = f"{word.lang}/{word.pos}" if word.pos else word.lang
-        print(f"  [{label}] (id={word.id})")
+        print(f"  [{label}] (id={word.id}), {word.pos}")
         for sense in word.senses:
             syns = ', '.join(s.synonym for s in sense.synonyms) or '—'
             print(f"    {sense.sense_no}. {sense.definition} | синонимы: {syns}")

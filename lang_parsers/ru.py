@@ -5,8 +5,28 @@ from common import (
     HEADING_RE, clean_common, find_headings, numbered_until, split_lines,
     split_synonyms,
 )
-from fp import mapcat, pipe
-from parser_types import Parser
+
+from lang_parsers.parser_types import Parser
+
+RU_POS_MAP = {
+    'сущ':     'Noun',
+    'прил':    'Adjective',
+    'гл':      'Verb',
+    'нар':     'Adverb',
+    'нареч':   'Adverb',
+    'мест':    'Pronoun',
+    'числ':    'Numeral',
+    'предл':   'Preposition',
+    'союз':    'Conjunction',
+    'част':    'Particle',
+    'межд':    'Interjection',
+    'предик':  'Predicative',
+    'вводн':   'Parenthetical',
+    'прич':    'Participle',
+    'деепр':   'Gerund',
+    'фразеол': 'Phrase',
+}
+RU_POS_RE = re.compile(r'\{\{\s*([а-яё]+)[\s\-]+ru\b', re.IGNORECASE)
 
 LANG_RU_RE = re.compile(r'^=\s*\{\{-([a-z-]+)\}\}\s*=\s*$', re.I)
 
@@ -65,9 +85,11 @@ def _senses_from_heading(
 
 
 def _parse_meanings(wikitext: str) -> list[dict]:
-    section = get_section(wikitext, 'ru')
+    section = _get_section(wikitext, 'ru')
     lines = section.splitlines()
     headings = find_headings(lines)
+
+    pos = _detect_pos(section)
 
     result: list[dict] = []
     for idx, (_, _, title) in enumerate(headings):
@@ -76,7 +98,7 @@ def _parse_meanings(wikitext: str) -> list[dict]:
         for item in _senses_from_heading(lines, headings, idx):
             result.append({
                 'lang': 'ru',
-                'pos': None,
+                'pos': pos,
                 'definition': item['definition'],
                 'synonyms': item['synonyms'],
             })
@@ -97,13 +119,18 @@ def _matches(text: str) -> bool:
         for line in text.splitlines()
     )
 
+def _detect_pos(section: str) -> str | None:
+    """Возвращает первую найденную часть речи из морфологического шаблона."""
+    for m in RU_POS_RE.finditer(section):
+        key = m.group(1).lower()
+        if key in RU_POS_MAP:
+            return RU_POS_MAP[key]
+    return None
 
 def _extract(wikitext: str, title: str) -> dict:
     return {
         'title': title,
-        'lexemes': [
-            {'lang': 'ru', 'pos': None, 'meanings': _parse_meanings(wikitext)},
-        ],
+        'meanings': _parse_meanings(wikitext),
     }
 
 

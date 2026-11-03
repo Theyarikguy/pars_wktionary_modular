@@ -1,7 +1,6 @@
 from pathlib import Path
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from connection import engine
+from sqlalchemy.orm import DeclarativeBase
+from database.connection import engine
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
