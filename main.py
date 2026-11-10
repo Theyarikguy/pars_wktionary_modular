@@ -42,6 +42,8 @@ def write_db(registry: ParserRegistry, lang: str | None = None) -> None:
 
                 if lang is not None:
                     parser = registry.get(lang)
+                    if not parser.matches(last_rev.text):   # ← добавлено
+                        continue
                     entries = [parser.extract(last_rev.text, page.title)]
                 else:
                     entries = [

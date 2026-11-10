@@ -1,6 +1,6 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -8,7 +8,7 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: str = f"sqlite:///{PROJECT_ROOT / 'app.db'}"
 
     API_SERVICE_PORT: int = 8000
 

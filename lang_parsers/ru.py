@@ -8,32 +8,92 @@ from common import (
 
 from lang_parsers.parser_types import Parser
 
-RU_POS_MAP = {
-    'сущ':     'Noun',
-    'прил':    'Adjective',
-    'гл':      'Verb',
-    'нар':     'Adverb',
-    'нареч':   'Adverb',
-    'мест':    'Pronoun',
-    'числ':    'Numeral',
-    'предл':   'Preposition',
-    'союз':    'Conjunction',
-    'част':    'Particle',
-    'межд':    'Interjection',
-    'предик':  'Predicative',
-    'вводн':   'Parenthetical',
-    'прич':    'Participle',
-    'деепр':   'Gerund',
-    'фразеол': 'Phrase',
+RU_POS_BY_NAME = {
+    'сущ':      'Noun',
+    'прил':     'Adjective',
+    'гл':       'Verb',
+    'нар':      'Adverb',
+    'нареч':    'Adverb',
+    'adv':      'Adverb',
+    'мест':     'Pronoun',
+    'числ':     'Numeral',
+    'предл':    'Preposition',
+    'prep'      'Preposition'
+    'союз':     'Conjunction',
+    'част':     'Particle',
+    'межд':     'Interjection',
+    'interj':   'Interjection',
+    'предик':   'Predicative',
+    'вводн':    'Parenthetical',
+    'прич':     'Participle',
+    'деепр':    'Gerund',
+    'фразеол':  'Phrase',
+    'phrase':   'Phrase',
+    'поговорк': 'Proverb',
+    'посл':     'Proverb',
+    'abbrev':  'Abbreviation',
+
 }
+
+RU_NON_POS_NAMES = {
+    'морфо', 'слобр', 'transcription', 'transcriptions', 'transcription-ru',
+    'по-слогам', 'пример', 'илл', 'иллюстрация', 'семантика',
+    'категория', 'wikipedia', 'wikt', 'омонимы', 'also', 'cf',
+}
+
+RU_BARE_POS_RE = re.compile(
+    r'\{\{\s*(фразеол|поговорк|посл)\s*[\|}]',
+    re.IGNORECASE,
+)
+
+RU_SURNAME_RE = re.compile(r'\{\{\s*Фам(?=[\s\|}])', re.IGNORECASE)
+
 RU_POS_RE = re.compile(r'\{\{\s*([а-яё]+)[\s\-]+ru\b', re.IGNORECASE)
 
-LANG_RU_RE = re.compile(r'^=\s*\{\{-([a-z-]+)\}\}\s*=\s*$', re.I)
+LANG_RU_RE = re.compile(r'^=\s*\{\{-([a-z-]+)-\}\}\s*=\s*$', re.I)
+
+
+
+# {{прил-ru|...}} / {{прил ru|...}}
+RU_POS_LANG_RE = re.compile(
+    r'\{\{\s*([a-zA-Zа-яё]+)[\s\-]+ru\b',
+    re.IGNORECASE,
+)
+
+
 
 clean_wikitext = clean_common
-
-
 # --- чистые функции ---
+
+def _has_template_for_ru(section: str, template_name: str) -> bool:
+    """Шаблон присутствует и либо без lang, либо с lang=ru."""
+    for span in _iter_balanced_templates(section, template_name):
+        body = section[span[0]:span[1]]
+        m = re.search(r'\|\s*lang\s*=\s*([a-zA-Z\-]+)', body)
+        if not m or m.group(1).lower() == 'ru':
+            return True
+    return False
+
+def _iter_balanced_templates(text: str, name: str):
+    """Итерируется по всем {{name ...}} с учётом вложенности."""
+    pattern = re.compile(r'\{\{\s*' + re.escape(name) + r'(?=[\s\|}])')
+    for m in pattern.finditer(text):
+        i = m.start()
+        depth = 0
+        j = i
+        while j < len(text) - 1:
+            if text[j:j + 2] == '{{':
+                depth += 1
+                j += 2
+            elif text[j:j + 2] == '}}':
+                depth -= 1
+                j += 2
+                if depth == 0:
+                    yield (i, j)
+                    break
+            else:
+                j += 1
+
 
 def _get_section(wikitext: str, lang: str = 'ru') -> str:
     lines = split_lines(wikitext)
@@ -49,7 +109,7 @@ def _get_section(wikitext: str, lang: str = 'ru') -> str:
             end = i
             break
     if start is None:
-        return wikitext
+        return ''
     return '\n'.join(lines[start:end if end is not None else len(lines)])
 
 
@@ -120,11 +180,31 @@ def _matches(text: str) -> bool:
     )
 
 def _detect_pos(section: str) -> str | None:
-    """Возвращает первую найденную часть речи из морфологического шаблона."""
-    for m in RU_POS_RE.finditer(section):
+    # 1) шаблоны с языковым суффиксом: {{сущ-ru}}, {{прил ru}}, {{adv ru}}
+    for m in RU_POS_LANG_RE.finditer(section):
         key = m.group(1).lower()
-        if key in RU_POS_MAP:
-            return RU_POS_MAP[key]
+        if key in RU_NON_POS_NAMES:
+            continue
+        if key in RU_POS_BY_NAME:
+            return RU_POS_BY_NAME[key]
+
+    # 2) {{phrase|...|lang=ru}} — фраза / устойчивое сочетание
+    if _has_template_for_ru(section, 'phrase'):
+        return 'Phrase'
+
+    # 3) {{morph|тип=p|lang=ru|...}} — морфема
+    if _has_template_for_ru(section, 'morph'):
+        return 'Morpheme'
+
+    # 4) {{Фам ин ов|...}} — фамилия
+    if RU_SURNAME_RE.search(section):
+        return 'Proper noun'
+
+    # 5) голые русские POS-шаблоны
+    m = RU_BARE_POS_RE.search(section)
+    if m:
+        return RU_POS_BY_NAME.get(m.group(1).lower())
+
     return None
 
 def _extract(wikitext: str, title: str) -> dict:
@@ -132,6 +212,28 @@ def _extract(wikitext: str, title: str) -> dict:
         'title': title,
         'meanings': _parse_meanings(wikitext),
     }
+
+def _find_balanced_template(text: str, name: str) -> tuple[int, int] | None:
+    """Находит {{name ...}} с учётом вложенных {{...}}, возвращает (start, end)."""
+    pattern = re.compile(r'\{\{\s*' + re.escape(name) + r'(?=[\s\|}])')
+    m = pattern.search(text)
+    if not m:
+        return None
+    i = m.start()
+    depth = 0
+    j = i
+    while j < len(text) - 1:
+        if text[j:j + 2] == '{{':
+            depth += 1
+            j += 2
+        elif text[j:j + 2] == '}}':
+            depth -= 1
+            j += 2
+            if depth == 0:
+                return (i, j)
+        else:
+            j += 1
+    return None
 
 
 RU_PARSER = Parser(code='ru', matches=_matches, extract=_extract)

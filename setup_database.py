@@ -4,7 +4,7 @@ from database.connection import engine
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT /"pars_modular"/ "app.db"
+DB_PATH = PROJECT_ROOT / "app.db"
 
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
