@@ -94,6 +94,99 @@ def _iter_balanced_templates(text: str, name: str):
             else:
                 j += 1
 
+def _find_balanced_template(text: str, name: str) -> tuple[int, int] | None:
+    """Находит {{name ...}} с учётом вложенных {{...}}, возвращает (start, end)."""
+    pattern = re.compile(r'\{\{\s*' + re.escape(name) + r'(?=[\s\|}])')
+    m = pattern.search(text)
+    if not m:
+        return None
+    i = m.start()
+    depth = 0
+    j = i
+    while j < len(text) - 1:
+        if text[j:j + 2] == '{{':
+            depth += 1
+            j += 2
+        elif text[j:j + 2] == '}}':
+            depth -= 1
+            j += 2
+            if depth == 0:
+                return (i, j)
+        else:
+            j += 1
+    return None
+
+
+def _split_template_args(body: str) -> list[str]:
+    """Разбивает 'a=1|b=2|c={{x|y}}' по | верхнего уровня."""
+    parts, current = [], []
+    depth = 0
+    i = 0
+    while i < len(body):
+        if body[i:i + 2] == '{{':
+            depth += 1
+            current.append('{{')
+            i += 2
+        elif body[i:i + 2] == '}}':
+            depth -= 1
+            current.append('}}')
+            i += 2
+        elif body[i] == '|' and depth == 0:
+            parts.append(''.join(current))
+            current = []
+            i += 1
+        else:
+            current.append(body[i])
+            i += 1
+    parts.append(''.join(current))
+    return parts
+
+
+def _parse_semantika_value(value: str) -> list[str]:
+    """Значение параметра синонимы=... → список строк."""
+    value = value.strip()
+    if not value or value in {'—', '-', '?'}:
+        return []
+
+    # {{помета|частичн.}}: [[луг]] → [[луг]]
+    value = re.sub(
+        r'\{\{\s*(?:помета|разг\.|прост\.|устар\.)\s*\|[^{}]*\}\}\s*:?\s*',
+        '', value,
+    )
+    # оставшиеся шаблоны
+    value = re.sub(r'\{\{[^{}]*\}\}', '', value)
+    # вики-ссылки
+    value = re.sub(r'\[\[([^\]|]+)\|([^\]]+)\]\]', r'\2', value)
+    value = re.sub(r'\[\[([^\]]+)\]\]', r'\1', value)
+    value = value.lstrip(':').strip()
+
+    result, seen = [], set()
+    for p in re.split(r'[,;]', value):
+        p = p.strip().strip(':,;.').strip()
+        if not p or p in seen or p in {'?', '—', '-'}:
+            continue
+        seen.add(p)
+        result.append(p)
+    return result
+
+
+def _extract_semantika_synonyms(line: str) -> list[str]:
+    """Синонимы из {{семантика|синонимы=...}} в строке определения."""
+    span = _find_balanced_template(line, 'семантика')
+    if span is None:
+        return []
+
+    body = line[span[0] + 2:span[1] - 2]
+    if body.startswith('семантика'):
+        body = body[len('семантика'):]
+        if body.startswith('|'):
+            body = body[1:]
+
+    for arg in _split_template_args(body):
+        key, sep, val = arg.partition('=')
+        if sep and key.strip() == 'синонимы':
+            return _parse_semantika_value(val)
+    return []
 
 def _get_section(wikitext: str, lang: str = 'ru') -> str:
     lines = split_lines(wikitext)
@@ -122,7 +215,7 @@ def _senses_from_heading(
     i, level, _ = headings[idx]
     definitions = numbered_until(lines, i, level)
 
-    # ищем следующую секцию 'Синонимы' до следующего 'Значение'
+    # секция === Синонимы === (если используется)
     synonyms_raw: List[str] = []
     for j in range(idx + 1, len(headings)):
         j_i, j_level, j_title = headings[j]
@@ -134,11 +227,26 @@ def _senses_from_heading(
 
     def build(pair: tuple[int, str]) -> Dict:
         k, raw = pair
+
+        # 1) синонимы из {{семантика}} — обязательно ДО clean_wikitext
+        from_semantika = _extract_semantika_synonyms(raw)
+
+        # 2) синонимы из отдельной секции (если есть)
         syn_text = synonyms_raw[k] if k < len(synonyms_raw) else ''
+        from_section = split_synonyms(clean_wikitext(syn_text)) if syn_text else []
+
+        # 3) объединяем без дублей, сохраняя порядок
+        merged, seen = [], set()
+        for s in from_semantika + from_section:
+            if s in seen:
+                continue
+            seen.add(s)
+            merged.append(s)
+
         return {
             'no': k + 1,
             'definition': clean_wikitext(raw),
-            'synonyms': split_synonyms(clean_wikitext(syn_text)),
+            'synonyms': merged,
         }
 
     return [build(p) for p in enumerate(definitions)]
